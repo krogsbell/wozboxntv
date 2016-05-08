@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.ntv" name="NTV.mx" version="1.0.16" provider-name="WOZTEC">
+  <requires>
+    <import addon="xbmc.python" version="2.1.0"/>
+  </requires>
+  <extension point="xbmc.python.pluginsource" library="default.py">
+        <provides>video</provides>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="en">plugin.video.ntv</summary>
+    <description lang="en">Stream all of your favourites sports, movies and tv from plugin.video.myindian. Requires a registration and paid subscription. Without subscription you can only use Euronews. Please register at ntv.mx[CR][CR]Record or display one channel at a time[CR][CR]Record recursively based on text search in the NTV.mx TV guide[CR][CR]Record from dr.dknu, dr.dk Bonanza and FilmOn with special versions of theese addons[CR][CR]Version Date 2016-01-19</description>
+    <platform>all</platform>
+  </extension>
+  <extension point="xbmc.service" library="service.py" start="login" />
+</addon>
+

@@ -1,0 +1,395 @@
+WOZBOXNTV 1.0.21 www.wozboxtv.com
+# This version i based on the original NTV AddOn 3.3.9 from Mickey1234 with additions for version 3.4.1 - 3.4.8 and v3.4.4-Krogsbell
+# The basic problem with NTV.mx is that you are only allowed to use one channel at a time, either from Web og XBMC/Kodi. If you have the MAG250 option, it has its own channel. You can watch films on the Web without interrupting the use of the the NTV.mx AddOn on XBMC/Kodi.
+# This version will help you to record channels and watch channels without interrupting an active channel.
+# This version is delivered as a ZIP file that you can install manually. It can run in parallel with the original NTV.mx AddOn, but remember that you can only use one channel at at time.
+# This version has been tested with Kodi 16.1 on Ubuntu 16.04 x64, OpenELEC x32 5.0.8, OpenELEC x64 6.0.0, Windows and Google TV with Android 4.4.2
+#
+# WARNING - This addon do not care about Daylight Savings. All timing is incremental. To avoid problems - restart your KODI when Daylight Saving has changed and if you change your timezone!
+# Some TV Guides do not take care of your timezone offset - This can be adjutse in the recording setup.
+#
+# NOTE Recursive search uses SQL statement by adding % in front and at the end. If you add % in the middle you can find e.g. 'Recursive: Formel%Løbet' will find something like 'Formel 1: Ruslands Grand Prix  Løbet'
+#
+# NOTE to Addroid users:
+# To record on Android you must copy ffmpeg from ../plugin.video.wozboxntv/ffmpeg/android/armeabi-v7a/ffmpeg to /vendor/bin/ffmpeg
+# Then set the execute flag on /vendor/bin/ffmpeg
+# Another option is to use rtmpdump:
+# Android recording working, but do not stop as expected when using rtmpdump
+# To record on Android you must copy two files in the addon subfolder ../rtmpdump/androidarm to /vendor/bin/rtmpdump and /vendor/lib/librtmp.so
+# Then set the execute flag on /vendor/bin/rtmpdump
+#
+# Please report your working platform as shown on the Recordings page of the settings together with the setting that is needed to have recording work on your platform. With this inforation, the setup of recording wil be automatic for your platform!
+#
+# If your recording fails and the recording is placed in several files you can put the files together on an Ubuntu system with theese simple commands:
+# Move all the files to a seperate folder and run this commandon each of the parts:
+# ffmpeg -i INCOMING.(FLV/MP4) -vcodec copy -acodec copy VIDEO_(01,02).mkv
+# Ex:
+# ffmpeg -i *].flv -vcodec copy -acodec copy 0.flv
+# ffmpeg -i *1.flv -vcodec copy -acodec copy 1.flv
+# ffmpeg -i *2.flv -vcodec copy -acodec copy 2.flv
+# then:
+# mkvmerge -o FULL_VIDEO.mkv VIDEO_01.mkv +VIDEO_02.mkv +VIDEO_03.mkv
+# Ex:
+# mkvmerge -o FULL_VIDEO.flv 0.flv +1.flv +2.flv
+# Then rename FULL_VIDEO.flv to [Original videoname]FULL_VIDEO.flv
+# Results can vary depending on your source files!
+#
+# Krogsbell changes:
+# 2016-05-06 When updating channels in your TV Guide - the SQL file can actually set the prefered channel in the TV Guide to your NTV channel - look at the file SQLadjustTVguideExample.sql in this program folder. It sets 15 DK channels when using Rytec Danish EPG (Note to force a change you have to modify the first line to point to another channel - e.g change DR1 to DR2 and back when you are satisfied)
+# 2016-05-04 Don't show (record)/(view) in ftvntv-krogsbell.ini for wozbox any more
+# 2016-05-03 Added the use of foreign characters like the Danish æøåÆØÅ
+#            When logging and the first 4 characters of entry is TEST, it will only be logged if recording debugging is enabled
+# 2016-04-26 Add Time Zone Offset to time from TV Guide to adjust changed timezone
+#            Time Zone offset in Hours (e.g. CET --> Greece set to 1)
+#            TimeZoneOffset = ADDON.getSetting('AdjustTVguideTimeZoneOffset')
+# 2016-04-21 Log when waiting to select NTV Channel for TV Guide channel not mapped automatically
+# 2016-04-18 Debug CatFromChannelName
+# 2016-04-16 Adjust TV Guide from a SQL file
+# If using service.rytecepgdownloader and selecting Danish - you can set the first 11 channels to use with a file with theese lines (SQLadjustTVguideExample.sql)(The AQL file is only executed if channel0 is different from firstchannel in the file!:
+firstchannel=DR1
+UPDATE channels SET weight = weight + 1000 WHERE weight < 1000
+UPDATE channels SET weight = 0 WHERE id = 'DR1.dk' COLLATE NOCASE
+UPDATE channels SET weight = 1 WHERE id = 'DR2.dk' COLLATE NOCASE
+UPDATE channels SET weight = 2 WHERE id = 'DR3.dk' COLLATE NOCASE
+UPDATE channels SET weight = 3 WHERE id = 'DRK.dk' COLLATE NOCASE
+UPDATE channels SET weight = 4 WHERE id = 'TV2.dk' COLLATE NOCASE
+UPDATE channels SET weight = 5 WHERE id = 'TV2Charlie.dk' COLLATE NOCASE
+UPDATE channels SET weight = 6 WHERE id = 'TV2fri.dk' COLLATE NOCASE
+UPDATE channels SET weight = 7 WHERE id = 'TV3.dk' COLLATE NOCASE
+UPDATE channels SET weight = 8 WHERE id = 'TV3Plus.dk' COLLATE NOCASE
+UPDATE channels SET weight = 9 WHERE id = 'TV3Sport1.dk' COLLATE NOCASE
+UPDATE channels SET weight = 10 WHERE id = 'TV3Sport2.dk' COLLATE NOCASE
+UPDATE channels SET visible = 1 WHERE weight < 11
+UPDATE channels SET visible = 0 WHERE weight > 10
+
+# 2016-03-20 In the TV Guide a view like programs but called programsForHumans are created with programs from your channels and from now and onwards
+# 2016-03-27 Find log file on spmc
+# 2016-03-26 Recursive recordings are put back in the TV Guide
+# 2016-03-21 Fixing recursive search 25 and 50 options
+#            Include NTV 3.4.8 changes by Mickey1234
+# 2016-03-20 Include NTV 3.4.7 changes by Mickey1234
+# 2016-03-16 Dont record anything less than 3 minute
+# 2016-03-14 Search recursives in TV Guide when grabbing from TV Guide
+#            Choose one TV Guide: script.wozboxtvguide, script.tvguide, script.ftvguide, script.ivueguide, custom or No TV Guide
+#            If custom is selected and empty - all known TV Guides are searched
+#            You can make recursive recordings. The text in the recording is searched in the TV Guide you have chosen.
+#            Each hour the TV Guide is searched for any reminders set and for recursive recordings that find a match.
+#            Recursive recordings can be made solely in the channels marked, in the first 25 channels, the first 50 channels or in all channels.
+#            You can setup your own TV Guide - if it is based on the original Tommy Winther TV Guide there is a big chance that it works.
+#            If you set up a custom TV Guide without any data - all the known TV Guides will be searched for reminders and match for recursive recordings. 
+# 2016-03-11 Grab from TV Guides timed
+# 2016-03-07 All greb'ed recordings have added TV Guide and channel description in the description saved
+# 2016-03-05 All Android set to use ffmpeg in /system/vendor/bin
+# 2016-03-03 Log version and version date in log and info file when recording
+# 2016-02-28 Grab notifications from TV Guides: script.wozboxtvguide, script.tvguide, script.ftvguide and script.ivueguide
+#            TVguide= [['script.wozboxtvguide','source.db'], ['script.tvguide','source.db'],['script.ftvguide','source.db'],['script.ivueguide','master.db']]
+# 2016-02-26 Included changes from Mikey1234 ver 3.4.6 in LoginURL 'c=3&a=0' ==> 'c=3&a=4'
+#            Use ffmpeg if executable in /vendor/bin/ffmpeg - if ffmpeg not executable give a warning
+# 2016-02-18 Test with rtmpdump in /vozbox  in place of /vendor/bin and./lib 
+# 2016-02-14 Recursive recording disabled automatic run - Use transfer notifications from Wozbox TV Guide or other TV Guides!
+# 2016-02-07 Transfer your notifications from the Wozbox TVguide to planned recordings from menu entry in Planned Recordings
+# 2016-02-04 Option to use with ffmpeg: Fast and slow
+# 2016-02-03 The TV guide shows green on channels recording with the same name - the text is red if another recording is set up
+# 2016-01-31 To use the common code to create one of the other addons:
+#            1. Copy the master folder plugin.video.wozbox to e.g. plugin.video.wliptv
+#            2. Modify the file definition.py to set the referral= <x>
+#            3. Copy addon<x>.xml to addon.xml and update the date and version number within this file
+#            4. Copy icon<x>.png to icon.png
+#            5. Compress the folder giving it a name including the version number and date
+# 2016-01-31 Bug fixes during debug
+# 2016-01-28 When modifying a record, the description can be modified.
+#            Added support for White Label App in Spain: http://www.wliptv.com plugin.video.wliptv
+# 2016-01-27 Notification is disabled during recursive search unless enabled
+# 2016-01-22 Added again: When modifying a recursive recording the part 'Recursive:' is not shown and can't be changed. Modifying a recursive record, you can only change the search text.
+# 2016-01-21 Added comment in ftvntv-krogsbell.ini files telling what is the source of the channels
+# 2016-01-19 Common code for addons: plugin.video.ntv, plugin.video.wozbox and plugin.video.myindian, just change 1. addon.xml, 2. icon.png and 3. definition.py
+# 2016-01-17 If no internet at startup you get a dialogbox warning
+# 2016-01-16 When modifying a recursive recording the part 'Recursive:' is not shown and can't be changed. Modifying a recursive record, you can only change the search text.
+# 2016-01-13 Added ffmpeg for Android - other platforms must install ffmpeg from https://ffmpeg.org/download.html
+#                   The default option has changed from rtmpdump to ffmpeg - Check this setting at Recording Settings!
+# 2016-01-12 Tested on Kodi 16 Beta 5 on Ubuntu 15.10 x64 and OpenELEC x64 6.0.0
+#                   Fixed recording file name, if Description contains unexpected charaters in the beginning
+# 2016-01-10 ftv-krogsbell.ini file now contains channels for original NTV Addon and both your channels and all NTV Ultimate channels for Wozbox NTV addon to be used with TV guides: Wozbox Guide, FTV Guide and TV Guide
+#                   If "my_referral_link"="0" in settings.xml - You will be asked to register with NTV.mx at http://ntv.mx/?r=xbmc&c=2&a=0&p=9
+# 2016-01-09 Ask to sign in or register on first run - (do not work from Add-on Short cuts in Kodi 16 Beta 4)
+# 2016-01-07 Fix duration timer in filename, when no description in record
+# 2016-01-06 Some icons changed to icons from woxbox.tv
+# 2016-01-05 Now Find Recursive always looks in the channel of the record even when that channel is not a favorite
+# 2016-01-04 Al icons are now in local database with links found in wozbox.tv, yousee.dk, ntv.mx and thaisatellite.tv and with Google image search - Icons are now chosen by channel number - Name and channelnumbers are now shown with Description.
+# 2016-01-03 All channel icons are now registered in a local database in the addons resource folder. Icons are from wozbox.tv, yousee.dk, ntv.mx and thaisatellite.tv
+# 2015-12-31 If duration is empty or 'n a' - the infofile shows at the end 'No description!'
+# 2015-12-30 Recording wih duration= 0 or non number records until end of stream - do not use with live stream
+# 2015-12-29 Recording can now be selected to use either rtmpdump (as usual) or ffmpeg (must be installed seperatly, unless it is part of your platform)
+# 2015-12-25 Check log file if it is TVMC.log and error in recorduriffmpeg.py in windows (missing s)
+# 2015-12-17 Database backup and settings.xml backup are now cleande up to limit maximun number of files in the backups
+#                   Sort recordings alphabetically
+# 2015-12-14 If possible, last settings.xml with a username is restored on startup.
+# 2015-12-13 If automatic logon fails - restore an old setting.xml from My Account - Past settings.xml
+# 2015-12-12 Dialogbox asks if you want to record from DR.DK or FilmOn
+# 2015-12-08 When playing a stream you are warned if a recording is in progres - the dialogbox shows the recording in progres
+# 2015-12-06 Recorded filename now includes duration in minutes, if duration is set
+# 2015-12-03 Record from FimlOn now with FFMPEG (installed separately)
+#                   If record time is set to 'ask' you will be asked for duration, if set to 'ignore' or empty no limit on the recording
+# 2015-12-02 Modified FilmOn now records with this version of WOZBOXNTV
+# 2015-11-23 Extra Android test to set record flag
+#                  CR LF in record info .txt file is now always Windows compatible
+# 2015-11-19 No double blue recording warnings
+# 2015-11-17 Warning about 'recording path not writable'
+# 2015.11.15 Recording modules moved to utils.py
+#                  Environt variables are no longer created with duplicates
+# 2015-11-14 Android recording working, but do not stop as expected
+#                  To record on Android you must copy two files in the addon subfolder ../rtmpdump/androidarm to /vendor/bin/rtmpdump and /vendor/lib/librtmp.so
+#                  Then set the execute flag on /vendor/bin/rtmpdump
+#                  You can use the Root Explorer App to copy and change the execute flag
+# 2015-10-22 Using SQL commands to speed up the showing of Planned recordings
+# 2015-10-16 When recording a new file is created together with the actual record. The extension is txt and it contains data for the recording including the description
+# 2015-10-11 Don't put Rescheduled in record name
+#                   Don't add Modified to record name
+# 2015-09-24 Tried record.py: subpr = Popen(shlex.split(cmd.encode('ascii')), stdin=PIPE, stdout=PIPE, stderr=STDOUT) # joyrider 2015-09-24 - recording stops early!
+# 2015-09-21 Android: Tries to copy rtmpdump to '/system/bin/rtmpdump' (and sets 0777) and uses librtmp.so in /data/data/org.xbmc.kodi/lib/
+#                  If this do not work make the copy of rtmpdump by a file manager in Android and set file properties to 0777. Start a terminal window and see if the the command rtmpdump will run!
+#                  If anything fails, try to root your Android device as a last chance
+# 2015-09-10 Added Vozbox Android setting - from rtmpdump/androidarm rtmpdump must be copied to /system/bin and librtmp.so to /system/lbr and both made exetutable for all
+# 2015-08-20 Email is seen at 'My Account' and can be changed and checked along with the password
+# 2015-08-18 Buy Subscription have been disabled - use the web: http://wozboxtv.com/registration
+# 2015-08-17 Modified dr.dk/bonanza to record with rtmpdump and dr.dk/nu to record with ffmpeg
+# 2015-08-05 Added record from modified app dr.dk/bonanza
+# 2015-07-13 Removed refresh container from background programs
+# 2015-07-11
+#    Added code to generate ftvntv-krogsbell.ini for different channels and mark end of inifile.
+#    If referral is 0 in setup.xml created for NTV Ultra and original NTV addin
+#    If referral is 1 in setup.xml created for the NTV channels you pay for and for use with wozboxntv addon including recording or view
+# 2015-07-07 Changed text at startup and icon.jpg
+# 2015-07-06
+#    If record locks are more than 4 hours old they are discarded
+#    If scan locks are more than 2 hours old they are discarded
+# 2015-06-29 Special version for: WOZBOX www.wozboxtv.com
+# 2015-06-24
+#    Using modified drnu addon from this date - this addon will record shown videos from DR Archive using ffpmeg installed seperately
+# 2015-06-08
+#    ftvntv-krogsbell.ini now contains links for both viwing and recording channels
+# 2015-06-05
+#    Link from FTV Guide or TV Guide can now record or show channel - enable and recordduration is set in the record flap!
+#    FTV Guide - set settings.xml like setting id="addons.ini.file" value="/home/XXXXX/.kodi/userdata/addon_data/plugin.video.wozboxntv/ftvntv-krogsbell.ini"
+#    TV Guide - copy .kodi/userdata/addon_data/plugin.video.wozboxntv/ftvntv-krogsbell.ini to .kodi/addons/script.tvguide/resources/addons.ini
+# 2015-05-29
+#    ftvntv-krogsbell.ini will now include My Channels and not all NTV Ultimate Channels
+# 2015-05-27
+#    Characters: (?)(+)(<)(>)(|) are not allowed in filename and will be removed
+# 2015-05-09
+#    Changed recorded filename to accept [] and replace : with ' -'
+#    Changed filename
+# 2015-05-07
+#    Moved lock files and ftvntv-krogsbell.ini from rtmpdump folder to userdata/addon.video.ntv-krogsbell
+# 2015-01-05
+#    Creates ftvntv-krogsbell.ini file to be used by ftv-epg guide placed in the rtmpdump folder
+# 2015-04-30
+#    Sort genres alphabetically
+# 2015-04-25
+#    Log when recursive is checked
+# 2015-04-24
+#    Setting to activate alphabetically sorting of channels: SortAlphabetically
+# 2015-03-26 Just one record menu entry
+# 2015-03-23
+#    Added Mikey1234 version 3.4.4 changes
+#    Keep 2014 icons until NTV changes them
+#    Set automatically TLBB for OpenELEC, to allow recording
+# 2015-03-12 Recordlock fixed to allow 2 consecutive programs with same title
+# 2015-01-10 Special version for: WOZBOX www.wozboxtv.com
+# 2015-03-09 Now with setup of referral, for use by NTV coworking companies
+# 2015-03-07 Record Folder menus repaired and dynamified
+# 2015-03-06 Repaired Restore at startup
+# 2015-03-03 Reset locking at startup
+# 2015-03-01 Disable recording works now during restore
+# 2015-02-28
+#     New error messages when recording fails
+#     Searching recursive recordings are now using lock and only one search at a time
+#     Implementing dynamic menues - Refresh on recursive recording show either Refresh or Refresh Recursive. If Refresh Recursive - a scan will be performed. Menus with no function not showed any more.
+#     Disable recording is repaired
+# 2015-02-16
+#     Date shown in planned recordings are shortened by ThisDay, ThisMonth, This Year
+#     More icons are added - Now icon url's can be used together with the translation table from 2014 icons.
+# 2015-02-10 No search for recursive recordings during recording. Search after 5 min, each 30 min and each 2 hours otherwise.
+# 2015-02-09 
+#     You can now restore a backup of your recordings database. When you start or stop Kodi, the database with recordings and recursive recordings are saved.
+#     From a new view you can select a previous database to be restored. When you select a database, the working database is saved, all recordings are deleted/stopped. The selected database is set as the active database and the reschedule function is activated.
+#     Recursive updates run once after 1 minute and every 45 minutes. Every 2 hours a search in favourites or all channels is performed.
+# 2015-02-07 The date is now not just today, when modifying a recording
+# 2015-02-05
+#     The database used to store recordings is copied each time you restart the Kodi with NTV-Krogsbell Add-on. The backup is placed together with the actual database in the userdata folder - addon-data and plugin.video.ntv...
+#     You can switch to a backup version by stopping Kodi and replace the file in use. If you delete the database in use, you just start with an empty database.
+#     Each time the Kodi is started, the recordings no longer in use will be deleted. Pending recordings will be marked Rescheduled. If an error occurs during rescheduling - the debug recording will bet set.
+#     The platform is now extracted from the log file and used to automatically select the platform for recording.
+#     Not all platforms are handled yet. The following platforms are handled with this version: Platform: Windows NT x86 32-bit, Linux x86 32-bit, Linux x86 64-bit and Android ARM 32-bit
+#     You can see your platform on the recording part of the settings page. If your platform is different from the above three, please raport to the forum with your platform and platform you must select to make recording work.
+#     If there should be problems with the automatically setting of platform, it can be disabled by setting the Debug Recording flag.
+# 2015-02-03 Searching for Recursive recordings can now be as original just the selected channel, search all favorite channels or all My Channels.
+#     When updating from the Planned Recordings view, by selecting a recursive recording will only search the original channel.
+#     Note that the time to search depends on the number og recursive recordings, the number of favorite channels and last the number of My channels.
+#     The search for recursive channels is started after 1 minute and then each 2.5 hours
+#     A setting will control if you want notifications during the search for recursive recordings
+# 2015-01-28 From Mikey1234 - Set the execute flag when needed
+# 2015-01-27 Recording autostops - No more recordings to stop recording
+#     When recursive recordings are checked, only new recordings will give notification
+# 2015-01-22 Recording is now working again - the command string to start recording have been changed to something like:
+#     /home/hans/.kodi/addons/plugin.video.ntv-wozbox/rtmpdump/linux64/rtmpdump --live  --stop 1536 --flv "/home/hans/Videos/[2015-01-22 13-24 0] - 235_6eren - Raymond.flv" --rtmp "rtmp://78.129.179.105:1935/edge/411?token=4925ff85bccebd79f1ab5a1c5b29e8b3&target=11.p5.27997&platform=3"
+# 2015-01-04 Created at function that can translate old icons to the new channels - to be removed when NTV.mx is updated or reduced to few icon changes. Table must be configured with new and old channel numbers. To use the table set the general addon parameter 'Use 2014 Icon' = true
+# 2014-12-26 Tested version 3.4.1 with Kodi 14.0 on Ubuntu 14.04 LTS - Recording still not working and icons on old channel numbers - otherwise nothing found.
+# 2014-12-22 --live and --stop commands are put back in the recording command - still recording not working
+# 2014-12-21 Filename of recording again contains <cat>_<channel name> like: 413_DR1 HD
+# 2014-12-20 Recording DR1 (147) records DR1 HD (413)
+# 2014-12-19 Added 3.4.1 updates from original 3.4.1 from Mikey1234
+#     NOTE! RECORDING DO NOT WORK!
+#     As of today 2014-12-19 the recording function do not work - NTV is working on it after the big update at NTV.
+#     When you restart XBMC/Kodi - the active recordings are marked with RESCHEDULED. If this is not the case, delete the recordings and create new ones. If they are created by the recursive function, it is quite easy.
+# 2014-11-23
+#     When Addon is started, the internet connection is checked
+#     When a recording i startes, the execute enable flag is checked. If it fails you will see a notice with the actual filename with full path.
+#     The Planned Recordings view now shows yesterday and all following recordings
+# 2014-11-08
+#     When installing on any Linux version, you must secure that the recording program is markes executable. You find these in the subfolder rtmpdump and in the subfolder marked with your OS
+#     The subfolder rtmpdump now holds files used for locking a recording in progress.
+#     New parameters in the setup are introduced under recording and setting.
+#     The Planned Recording view now shows the recording progress and any problem of abrupt recording.
+#     If the quality of the recorded channel drops, recording stops. The recording will then be retried for a number of times, resulting in extra files in the recordings view.
+#     The recorded view is now sorted with the newest recordings in the top, regardles of your os
+#     Recordings with 'Stop Recording' in filename will be deleted if possible, whenever recursive recordings are tested.
+#     Recordings view will now show folders and have a menu iten to open folders. Opening recordings view will always start from where files are recorded.
+# 2014-10-18 Menu items (if recording active):
+#     TV Guide
+#        With the default setup showing TV Guide/EPG - the view TV Guide shows time and title of the selected view and on the right you can se the description of the selected program with view option as 503.
+#     RECORD
+#        If you select record from the TV Guide view, the selected program is set to be recorded and it is checked, that the required timeslot is free.
+#        If you select fram the Channels view, the program is normally already started, so you are asked for start date (default today), start time, stop date(watch out if you pass midnight), stop time and finally the title of the program.
+#        With this feature, you can set to record any program at any time.
+#        It is found that the channel DK1 HD has no TV Guide, but shows a better quality than the channel DK1. So if you setup recording on DK1, you will actually record DK1 HD.
+#        Recordings do not stop automatically. This version has implemented a funtion, where a recording is started after the planned recording. This recording is marked Stop recording: and the title of the original recording. If you have set the end time wrong - you are lucky as the recording continues on the same channel, but in a new file. You can stop a recording by watching a channel and accept the warning - STOP RECORDING!
+#     RECORD RECURSIVE
+#        Used from the TV Guide view to mark a program that you always want to record. You should immediately use Modify Record, to change the title of the recording to the textstring, that is in the TV Guide each week. If you want to record Formula 1, select the channel TV3 Plus and find a program with Formula 1 in the titel and select  Record Recursive. Then select Modify Record and change the titel from Formula 1: Russia to just Formula 1. The search is immune to upper/lowe case.
+#        The Record Recursive is set to search the TV Guide each second hour and during restart for programs on this channel containing the title.
+#        The recursive recording is searched in reverse order of the time when the recording is created og modified. If you have a more importent recursive recording, just modify it to search it before the other. Why is that - when you search recursive recordinge, the found programs are set for recording if the timeslot is free - If not the recording is marked passive and shown in blue.
+#     MODIFY RECORD
+#        If you want to prolong the recording time to include two adjacent programs, just modify the recording. Before you modify a recording, you should delete the Stop Recording for the program.
+#        If you modify a recursive recording, you will only be asked for the name/search title as start/stop times are of no relevance for recursive recordings.
+#     DISABLE RECORD
+#        If you have recursive recording that makes a recording, that you do not want, mark it Disabled. A new search of recursive programs will not enable it again and the time slot can be used for other programs.
+#        To release a disabled recording, just modify it.
+#        Disabled recordings are marked orange.
+#     DELETE RECORD
+#        Any record that you do not need any more - just delete it.
+#        Records are only shown if they are for today and in the future or are recursive recordings. When you restart the XBMC/Kodi only visible records are restores - all older records are remover from the database.
+#        If you delete an active recording do not stop the recording. To stop the recording just show a program.
+#        If you have an active recording your XBMC/Kodi will not exit until you on Windows go to the Joblist and stop the process rtmpdump.exe(32 bit)
+#     Planned Recordings
+#        This wiew shows the planned recordings and the definition of the recursive recordings.
+#        The planned recordings ar shown for all of today. The recordings that have been executed are shown in pale white, the others with yellow time. An active recording is shown in red.
+#        Recordings in blue are recursive recordings, that are inactive as there were no avalable time slot.
+#        Recordings in orange are disabled recordings
+#     Recorded
+#        Just switch to the view that shows the recorded programs. If you place eg. .mp4 files in this folder, they can be shown with the recorded programs.
+#        Recorded programs have filenames as: [2014-10-18 20-01] - 188_TV_2_Charlie - Doc Martin.flv
+#                                             [Start time]       - channel number and channel name - title of program and .flv as extension
+#     Toggle Favourites
+#        Mark channels at your favorite and then shown in the favorite viev.
+#        Views are sorted by channel name
+#     Refresh
+#        Refresh the view you are in.
+#        If you are in the Planned Recordings view and have selected a recursive recording - the TV Guide will be searched for recursive recordings and the view is refreshed. The search is always executed at the start of XBMC/Kodi and each following two hours.
+#
+#     During restart of XBMC/Kodi all planned and recursive recordings are activated again. Agent to maintain recursive recordings are started.
+#
+# 2014-10-12 Recordings that are not allowed are marked blue. they can be activated by modifying the record.
+#     Recursive recordings can be marked wit a leading * - When you modify a Recursive recording, the TV Guide will be searched for part of the title in the selected channel
+# 2014-10-07 The view Planned Recordings now shows the description of the planned recording. The database with recordings are now in recordings_ad.db as the old recordings database is not compatible
+You can update the file
+resources/changelog.txt to show:
+<category label="[COLOR blue][B]Auto View[/B][/COLOR]">
+	<setting id="auto-view" type="bool" label="[COLOR blue][B]Enable Automatic View[/B][/COLOR]" default="true"/>
+	<setting id="main-view" type="number" label="[COLOR blue][B]Main View[/B][/COLOR]" default="50" enable="!eq(-1,false)"/>
+	<setting id="channels-view" type="number" label="[COLOR blue][B]Channels View[/B][/COLOR]" default="503" enable="!eq(-2,false)"/>
+	<setting id="tvguide-view" type="number" label="[COLOR blue][B]TV Guide View[/B][/COLOR]" default="503" enable="!eq(-3,false)"/>
+	<setting id="recordingsplanned-view" type="number" label="[COLOR blue][B]Planned Recordings View[/B][/COLOR]" default="503" enable="!eq(-4,false)"/>
+	<setting id="default-view" type="number" label="[COLOR blue][B]Default View[/B][/COLOR]" default="50" enable="!eq(-5,false)"/>
+	
+# 2014-09-28 When XBMC/Kodi is restarted - all recordings are scheduled once again
+#	Recordings can now be deleted or modified
+# 2014-09-25 change of dates and recording name limited to cases where it is needed
+# A new recording is planned to start just after the recording should end
+# - this cuts the saved recording and the recording you can delete starts with Recording Stop:
+# In the Planned recording view - any active recording is marked red
+# 2014-09-18 Channels and favorites are sorted buy channel name
+#    from operator import itemgetter
+#    #Sort channels by start 2. parameter!
+#    channels = sorted(channels, key=itemgetter('name'))
+# 2014-09-16 Added the recorded view in green together with TV Guide and record
+# 2014-09-16 The view with Planned Recordings is now sorted by start date
+
+v3.3.2
+Fixed Couple Issues
+
+v3.3.1
+Changed Recording (if no title set duration and name)
+useed set resolved method for playback
+
+v3.2.9
+Fixed Recording
+
+v3.2.0
+Fix Payments Service
+
+v3.1.9
+Fixed Playable Url Issue
+
+v3.1.8
+Fixed TLBB Record
+
+v3.1.3
+Fixed Card Processing
+
+v3.1.2
+Genre Fix Thank You (jmh2002)
+
+v3.1.1
+Faster GUI
+Added Toggle Favourites
+Better Login Implementation
+Added My Account
+Added New Subscriptions
+Added Extend Subscription
+Added PAy Via Plugin
+
+
+
+
+
+v3.0.5
+Added RTMP Timeout
+
+v3.0.4
+Fixed Addon.xml
+
+v3.0.3
+Fixed Genre
+
+v3.0.2
+Added Register Via Plugin
+Added Record Function Enable In Settings(Thank You You Know WHo YOu Are)
+Added AutoView
+Added Description Per Channel
+Added Icons Per Channel
+
+v3.0.1
+Quick Fix
+
+v3.0.0
+Added Tv Guide
+
+v2.0.4
+Added List Via Genre
+
+v2.0.3
+Added Tv Guide
+Added Instant Tv Guide
+
+v1.0.0
+Initial Release
