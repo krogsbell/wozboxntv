@@ -1,5 +1,6 @@
 # wozboxntv
-Kodi addon for  NTV.mx using Wozbox 
+Kodi addon for  NTV.mx using Wozbox.
+
 An enhanced version of the original NTV.mx addon including version 3.4.8.
 It shows icons of most channels
 Recording is controlled via a database and there are views to control recording
