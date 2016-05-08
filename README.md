@@ -10,4 +10,5 @@ You can make recursive recordings from the addon - then on an hourly basis your 
 You can controll the TV Guide with an SQL file - example is supplied.
 Recording with RTMPDUMP or FFMPEG on all platforms including Android.
 Take a look in the changelog.txt to see how things are working.
+
 Regards Hans 
